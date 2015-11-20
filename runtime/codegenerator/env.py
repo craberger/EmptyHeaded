@@ -4,7 +4,7 @@ from pprint import pprint
 
 class Environment:
 	config = {}
-	schemas = {} 
+	schemas = {}
 	relations = {}
 	encodings = {}
 
@@ -13,8 +13,8 @@ class Environment:
 	def setSchemas(self,scheme):
 		self.schemas = scheme
 
-	def setRelations(self,relations):
-		self.relations = relations
+	def addRelations(self,relations):
+		self.relations.update(relations)
 
 	def setEncodings(self,encodings):
 		self.encodings = encodings
