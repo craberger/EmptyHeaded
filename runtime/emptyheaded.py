@@ -43,17 +43,20 @@ def createDB(name):
   #environment.dump()
 
 def fetchData(relation):
+  schema = environment.schemas[relation]
+  annotation = str(schema["annotation"])
+  cols = map(str, schema["orderings"][0])
+  if annotation != "void*":
+    cols.append("annotation")
   if relation in environment.liverelations:
     query = environment.liverelations[relation]
-    schema = environment.schemas[relation]
-    annotation = str(schema["annotation"])
-    cols = map(str, schema["orderings"][0])
-    if annotation != "void*":
-      cols.append("annotation")
     tuples = eval("""query["query"].fetch_data_"""+str(query["hash"])+"""(query["trie"])""")
     return pd.DataFrame.from_records(data=tuples,columns=cols)
   else:
-    return pd.DataFrame.from_records(data=codegenerator.fetchRelation.fetch(relation,environment))
+    return pd.DataFrame.from_records(
+      data=codegenerator.fetchRelation.fetch(relation,environment),
+      columns=cols,
+    )
 
 def numRows(relation):
   if relation in environment.liverelations:

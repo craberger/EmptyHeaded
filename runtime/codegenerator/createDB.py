@@ -5,118 +5,139 @@ import itertools
 import cppgenerator
 import code.querytemplate
 import os
-from sets import Set
 import code.build
 import imp
 
+
 def printraw(s):
-	sys.stdout.write(s)
+    sys.stdout.write(s)
+
 
 def generateAllOrderings(num):
-	return list(itertools.permutations(range(0,num)))
+    return list(itertools.permutations(range(0, num)))
+
 
 def printLoadedRelation(relation):
-	printraw("\t" + relation["name"] + "(")
-	printRels = map(lambda x: str(x["encoding"]+":"+x["attrType"]),relation["attributes"])
-	printraw(",".join(printRels))
-	print ")"
+    printraw("\t" + relation["name"] + "(")
+    printRels = map(lambda x: str(x["encoding"] + ":" + x["attrType"]), relation["attributes"])
+    printraw(",".join(printRels))
+    print ")"
 
-def fromJSON(path,env):
-  data = json.load(open(path))
-  relations = data.pop("relations",0)
-  env.setup(data)
 
-  libname = "loadDB"
-  os.system("rm -rf "+env.config["database"])
-  os.system("cd $EMPTYHEADED_HOME/storage_engine && make clean && make emptyheaded NUM_THREADS=" + str(env.config["numThreads"]) + "&& cd -")
-  a = cppgenerator.compileAndRun(
-		lambda: loadRelations(relations,env,libname),
-		libname,env.config["memory"],[],"void*",str(env.config["numThreads"]))
-  del a
-  envRelations = {}
-  for relation in relations:
-    attributes = relation["attributes"]
-    #grab the orderings (create them if all is specified)
-    orderings = relation["orderings"]
-    if len(orderings) == 1 and orderings[0] == "all":
-      orderings = generateAllOrderings(len(attributes))
-    r = cppgenerator.compileAndRun(lambda: buildTrie(orderings,relation,env,"build_"+relation["name"]),
-			"build_"+relation["name"],env.config["memory"],[],"void*",str(env.config["numThreads"]))
-    del r
-    envRelations[relation["name"]] = { \
-			"orderings":orderings,\
-			"annotation":relation["annotation"],\
-			"attributes":relation["attributes"]}
-  env.setSchemas(envRelations)
+def fromJSON(path, env):
+    data = json.load(open(path))
+    relations = data.pop("relations", 0)
+    env.setup(data)
 
-  env.toJSON(env.config["database"]+"/config.json")
+    libname = "loadDB"
+    os.system("rm -rf " + env.config["database"])
+    os.system("cd $EMPTYHEADED_HOME/storage_engine && make clean && make emptyheaded NUM_THREADS=" + str(
+        env.config["numThreads"]) + "&& cd -")
+    a = cppgenerator.compileAndRun(
+        lambda: loadRelations(relations, env, libname),
+        libname, env.config["memory"], [], "void*", str(env.config["numThreads"]))
+    del a
+    envRelations = {}
+    for relation in relations:
+        attributes = relation["attributes"]
+        # grab the orderings (create them if all is specified)
+        orderings = relation["orderings"]
+        if len(orderings) == 1 and orderings[0] == "all":
+            orderings = generateAllOrderings(len(attributes))
+        r = cppgenerator.compileAndRun(lambda: buildTrie(orderings, relation, env, "build_" + relation["name"]),
+                                       "build_" + relation["name"], env.config["memory"], [], "void*",
+                                       str(env.config["numThreads"]))
+        del r
+        envRelations[relation["name"]] = { \
+            "orderings": orderings, \
+            "annotation": relation["annotation"], \
+            "attributes": relation["attributes"]}
+    env.setSchemas(envRelations)
 
-  print "Created database with the following relations: "
-  for relation in relations:
-    printLoadedRelation(relation)
+    env.toJSON(env.config["database"] + "/config.json")
+
+    print "Created database with the following relations: "
+    for relation in relations:
+        printLoadedRelation(relation)
+
 
 ##########
-#Code generation methods
-def loadRelationCode(relations,env):
-	encodings = Set()
-	codeString = ""
-	os.system("mkdir -p " + env.config["database"])
-	os.system("mkdir -p " + env.config["database"] + "/encodings")
-	os.system("mkdir -p " + env.config["database"] + "/relations")
+# Code generation methods
+def loadRelationCode(relations, env):
+    encodings = set()
+    codeString = ""
+    os.system("mkdir -p " + env.config["database"])
+    os.system("mkdir -p " + env.config["database"] + "/encodings")
+    os.system("mkdir -p " + env.config["database"] + "/relations")
 
-	for relation in relations:
-		os.system("mkdir -p " + env.config["database"] + "/relations/"+relation["name"])
+    # Only declare each distinct encoding once even if it appears in mult relations
+    for relation in relations:
+        for attr in relation["attributes"]:
+            encodings.add((attr["encoding"],attr["attrType"]))
+    for e in encodings:
+        codeString += code.build.declareEncoding(e)
 
-		types = ",".join(list(map(lambda x: str(x["attrType"]),relation["attributes"])))
-		relencodings = list(map(lambda x: (str(x["encoding"]),str(x["attrType"])),relation["attributes"]))
+    for relation in relations:
+        os.system("mkdir -p " + env.config["database"] + "/relations/" + relation["name"])
 
-		codeString += code.build.declareColumnStore(relation["name"],types)
-		codeString += code.build.declareAnnotationStore(relation["name"],relation["annotation"])
-		for e in set(relencodings):
-			encodings.add(e)
-			codeString += code.build.declareEncoding(e)
-		codeString += code.build.readRelationFromTSV(relation["name"],relencodings,relation["source"])
+        types = ",".join(list(map(lambda x: str(x["attrType"]), relation["attributes"])))
+        relencodings = list(map(lambda x: (str(x["encoding"]), str(x["attrType"])), relation["attributes"]))
 
-	envEncodings = {}
-	for encoding in encodings:
-		name,types = encoding
-		os.system("mkdir -p " + env.config["database"] + "/encodings/"+name)
-		codeString += code.build.buildAndDumpEncoding(env.config["database"],encoding)
-		envEncodings[name] = types
-	env.setEncodings(envEncodings)
+        codeString += code.build.declareColumnStore(relation["name"], types)
+        codeString += code.build.declareAnnotationStore(relation["name"], relation["annotation"])
+        codeString += code.build.readRelationFromTSV(
+            relation["name"],
+            relencodings,
+            relation["source"],
+            relation["annotation"],
+        )
 
-	for relation in relations:
-		relencodings = list(map(lambda x: (str(x["encoding"]),str(x["attrType"])),relation["attributes"]))
-		codeString += code.build.encodeRelation(
-			env.config["database"],
-			relation["name"],
-			relencodings,
-			relation["annotation"])
-	return codeString
+    envEncodings = {}
+    for encoding in encodings:
+        name, types = encoding
+        os.system("mkdir -p " + env.config["database"] + "/encodings/" + name)
+        codeString += code.build.buildAndDumpEncoding(env.config["database"], encoding)
+        envEncodings[name] = types
+    env.setEncodings(envEncodings)
 
-def loadRelations(relations,env,hashstring):
-	include = """#include "emptyheaded.hpp" """
-	runCode = loadRelationCode(relations,env)
-	return code.querytemplate.getCode(include,runCode,hashstring)
+    for relation in relations:
+        relencodings = list(map(lambda x: (str(x["encoding"]), str(x["attrType"])), relation["attributes"]))
+        codeString += code.build.encodeRelation(
+            env.config["database"],
+            relation["name"],
+            relencodings,
+            relation["annotation"])
+    return codeString
 
-def buildTrie(orderings,relation,env,hashstring):
-	include = """#include "emptyheaded.hpp" """
-	codeString = code.build.loadEncodedRelation(env.config["database"],relation["name"])
 
-	envRelations = {}
-	for ordering in orderings:
-		roname = relation["name"] + "_" + "_".join(map(str,ordering))
-		envRelations[roname] = "disk"
-		trieFolder = env.config["database"] + "/relations/"+relation["name"]+"/"+roname
-		os.system("mkdir -p " + trieFolder)
-		os.system("mkdir -p " + trieFolder +"/mmap")
-		os.system("mkdir -p " + trieFolder+"/ram")
+def loadRelations(relations, env, hashstring):
+    include = """#include "emptyheaded.hpp" """
+    runCode = loadRelationCode(relations, env)
+    return code.querytemplate.getCode(include, runCode, hashstring)
 
-		codeString += code.build.buildOrder(
-			trieFolder,
-			relation["name"],
-			ordering,
-			relation["annotation"],
-			env.config["memory"])
-	env.setRelations(envRelations)
-	return code.querytemplate.getCode(include,codeString,hashstring)
+
+def buildTrie(orderings, relation, env, hashstring):
+    include = """#include "emptyheaded.hpp" """
+    codeString = code.build.loadEncodedRelation(
+        env.config["database"],
+        relation["name"],
+        relation["annotation"],
+    )
+
+    envRelations = {}
+    for ordering in orderings:
+        roname = relation["name"] + "_" + "_".join(map(str, ordering))
+        envRelations[roname] = "disk"
+        trieFolder = env.config["database"] + "/relations/" + relation["name"] + "/" + roname
+        os.system("mkdir -p " + trieFolder)
+        os.system("mkdir -p " + trieFolder + "/mmap")
+        os.system("mkdir -p " + trieFolder + "/ram")
+
+        codeString += code.build.buildOrder(
+            trieFolder,
+            relation["name"],
+            ordering,
+            relation["annotation"],
+            env.config["memory"])
+    env.addRelations(envRelations)
+    return code.querytemplate.getCode(include, codeString, hashstring)

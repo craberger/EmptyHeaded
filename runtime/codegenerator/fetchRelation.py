@@ -39,10 +39,16 @@ def fetch(relation,env):
 		if trieName in env.relations:
 			if env.relations[trieName] == "disk":
 				#get encodings
-				result = cppgenerator.compileAndRun(lambda: 
-					fetchData(relation,trieName,schema["annotation"],schema["attributes"],env),
-					"fetchData_"+relation,env.config["memory"],types,schema["annotation"],str(env.config["numThreads"]))
-				return result[0].fetch_data(result[1])
+				hashstring = "fetchData_"+relation
+				result = cppgenerator.compileAndRun(
+					f=lambda:fetchData(relation,trieName,schema["annotation"],schema["attributes"],env),
+					hashstring=hashstring,
+					mem=env.config["memory"],
+					types=types,
+					annotationType=schema["annotation"],
+					numThreads=str(env.config["numThreads"]))
+				tuples = eval("""result[0].fetch_data_"""+str(hashstring)+"""(result[1])""")
+				return tuples
 			else:
 				print "Not yet supported. Must be on disk."
 		else:
@@ -67,8 +73,9 @@ def fetchData(relation,trieName,annotationType,attributes,env):
 			runCode += code.fetch.loadEncoding(env.config["database"],a["encoding"],a["attrType"])
 			s.add(a["encoding"])
 	encodings = map(lambda i:i["encoding"],attributes)
-	runCode += code.fetch.setResult(trieName,encodings)
-	return code.querytemplate.getCode(include,runCode)
+	hashstring = "fetchData_"+relation
+	runCode += code.fetch.setResult(trieName,encodings,hashstring)
+	return code.querytemplate.getCode(include,runCode,hashstring)
 	#cppgenerator.compileAndRun(
 	#lambda: cppgenerator.loadRelations(relations,env),
 	#libname)

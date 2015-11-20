@@ -73,8 +73,9 @@ static PyObject * fetch_data_%(hashstring)s(PyObject * self, PyObject * args){
     PyTuple_SetItem(retRow,%(i)s,rowelem_%(i)s);"""% locals()
   elif annotationType == "void*":
     code+=""""""
-  elif t == "float":
-    print "NOT IMPLEMENTED"
+  elif annotationType == "float":
+    code+="""PyObject * rowelem_%(i)s = PyFloat_FromDouble((double)value);
+    PyTuple_SetItem(retRow,%(i)s,rowelem_%(i)s);"""% locals()
 
   code += """if(PyList_Append(retTable,retRow) == -1){
    	std::cout << "ERROR INSERTING ROW";}"""% locals()

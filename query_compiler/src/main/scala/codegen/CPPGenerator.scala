@@ -101,7 +101,7 @@ object CPPGenerator {
       s"""Trie<${r.annotation},${Environment.config.memory}>* Trie_${r.name}_${r.ordering.mkString("_")} = NULL;
       {
         auto start_time = timer::start_clock();
-        Trie_${r.name}_${r.ordering.mkString("_")} = Trie<void *,${Environment.config.memory}>::load( 
+        Trie_${r.name}_${r.ordering.mkString("_")} = Trie<${r.annotation},${Environment.config.memory}>::load( 
           "${Environment.config.database}/relations/${r.name}/${r.name}_${r.ordering.mkString("_")}"
         );
         timer::stop_clock("LOADING Trie ${r.name}_${r.ordering.mkString("_")}", start_time);      
