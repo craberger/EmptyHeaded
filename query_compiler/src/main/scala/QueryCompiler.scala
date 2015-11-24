@@ -34,7 +34,7 @@ object QueryCompiler {
         c.copy(bagDedup = false)} text("whether to deduplicate bags in the GHD")
       opt[Unit]('f', "read-query-from-file") action { (_, c) =>
         c.copy(readQueryFromFile = true)} text("whether to read the query from a file, defaults to false")
-      arg[String]("<query>") action { (x, c) =>
+      opt[String]("<query>") action { (x, c) =>
         c.copy(query = x)} text("query")
       help("help") text("prints this usage text")
     }
@@ -49,8 +49,8 @@ object QueryCompiler {
         }
         
 
-      val queryPlan = config.codeGen match {
-        case None => DCParser.run(queryString, config)
+      val queryPlans:QueryPlans = config.codeGen match {
+        case None => QueryPlans(List[QueryPlan](DCParser.run(queryString, config))) //SUSAN FIXME when we get code chunks we get a list of query plans for code generation
         case Some(g) => QP.fromJSON(g)
       }
 
@@ -65,9 +65,9 @@ object QueryCompiler {
       }
 
       if (!config.explain) {
-        CPPGenerator.run(queryPlan)
+        CPPGenerator.run(queryPlans)
       } else {
-        output.print(queryPlan)
+        output.print(queryPlans)
       }
       output.close
     } getOrElse {
