@@ -11,8 +11,8 @@
     "R_1_0": "disk",
     "R_0_1": "disk",
     "S_1_0": "disk",
-    "S_0_1": "disk"
-
+    "S_0_1": "disk",
+    "InvDeg": "disk"
   },
   "memory": "ParMemoryBuffer",
   "schemas": {
@@ -61,7 +61,22 @@
         ]
       ],
       "annotation": "blah"
+    },
+    "InvDeg": {
+      "attributes": [
+        {
+          "attrType": "long",
+          "encoding": "node"
+        },
+      ],
+      "orderings": [
+        [
+          0
+        ],
+      ],
+      "annotation": "blah"
     }
+
   },
   "resultName":"",
   "resultOrdering":[]

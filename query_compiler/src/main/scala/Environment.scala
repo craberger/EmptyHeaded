@@ -5,6 +5,8 @@ import net.liftweb.json._
 import scala.io._
 
 import net.liftweb.json.Serialization.{read, write, writePretty}
+import scala.collection.mutable.Stack
+
 /*
   Stores information about what is in the database and 
   current configuration of the database. This is necessary
@@ -15,11 +17,13 @@ case class RelationNotFoundException(what:String)  extends Exception
 
 object Environment {
   var config:DatabaseConfig = null
+  var schemaStack:Stack[Map[String, Schema]] = Stack[Map[String, Schema]]()
 
   def fromJSON(filename:String) = {
     val fileContents = Source.fromFile(filename).getLines.mkString
     implicit val formats = DefaultFormats
     config = parse(fileContents).extract[DatabaseConfig]
+    schemaStack.push(config.schemas)
   }
   def toJSON() = {
     val filename = config.database+"/config.json"
@@ -27,25 +31,23 @@ object Environment {
     scala.tools.nsc.io.File(filename).writeAll(writePretty(config))
   }
 
-  /**
-   * Check that a relation with this name and this number of attributes has been loaded
-   */
-  def isLoaded(queryRelation: QueryRelation): Boolean = {
-    config.schemas.get(queryRelation.name)
-      .map(schema => schema.attributes.length == queryRelation.attrs.length).getOrElse(false)
-  }
 
   /**
    * @param queryRelation find the query relation with this name and attrs and set it's annotation as in the config
    * @return boolean indicates whether this was successful (may not be if queryRelation does not exist)
    */
   def setAnnotationAccordingToConfig(queryRelation: QueryRelation): Boolean = {
-   if (isLoaded(queryRelation)) {
-     config.schemas.get(queryRelation.name)
-       .filter(schema => schema.attributes.length == queryRelation.attrs.length)
-       .map(schema => queryRelation.annotationType = schema.annotation)
-      return true
-    }
-    return false
+    val schema = schemaStack.find(schema => schema.get(queryRelation.name)
+      .find(schema => schema.attributes.length == queryRelation.attrs.length).isDefined)
+    schema.map(schema => queryRelation.annotationType = schema.get(queryRelation.name).get.annotation)
+    return schema.isDefined
+  }
+
+  def startScope(): Unit = {
+    schemaStack.push(Map[String, Schema]())
+  }
+
+  def endScope(): Unit = {
+    schemaStack.pop()
   }
 }

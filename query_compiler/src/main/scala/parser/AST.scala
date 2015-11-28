@@ -1,7 +1,7 @@
 package DunceCap
 
-abstract trait ASTStatement {
-}
+abstract trait ASTStatement {}
+abstract trait ASTConvergenceCondition {}
 
 //input to this should be 
 //(1) list of attrs in the output, 
@@ -13,22 +13,26 @@ class ASTLambdaFunction(val inputArgument:QueryRelation,
                         val join:List[QueryRelation],
                         val aggregates:Map[String,ParsedAggregate])
 
-case class ASTQueryStatement(
-                              lhs:QueryRelation,
-                              joinType:String,
-                              join:List[QueryRelation],
-                              recursion:Option[RecursionStatement],
-                              tc:Option[TransitiveClosureStatement],
-                              joinAggregates:Map[String,ParsedAggregate]) extends ASTStatement {
-  // TODO (sctu) : ignoring everything except for join, joinAggregates for now
 
-  def computePlan(config:Config): QueryPlan = {
-    // get the annotations
-    val missingRelations = join.filter(rel => !Environment.isLoaded(rel))
-    if (!missingRelations.isEmpty) {
+case class ASTItersCondition(iters:Int) extends ASTConvergenceCondition
+case class ASTEpsilonCondition(eps:Double) extends ASTConvergenceCondition
+
+case class ASTQueryStatement(lhs:QueryRelation,
+                             convergence:Option[ASTConvergenceCondition],
+                             joinType:String,
+                             join:List[QueryRelation],
+                             joinAggregates:Map[String,ParsedAggregate]) extends ASTStatement {
+  // TODO (sctu) : ignoring everything except for join, joinAggregates for now
+  def dependsOn(statement: ASTQueryStatement): Boolean = {
+    val namesInStatement = (statement.join.map(rels => rels.name):::statement.joinAggregates.values.map(parsedAgg => parsedAgg.expression).toList).toSet
+    join.find(rel => namesInStatement.contains(rel.name)).isDefined
+  }
+
+  def computePlan(config:Config, isRecursive:Boolean): QueryPlan = {
+    val annotationSetSuccess = join.map(rel => Environment.setAnnotationAccordingToConfig(rel))
+    if (annotationSetSuccess.find(b => !b).isDefined) {
       throw new RelationNotFoundException("TODO: fill in with a better explanation")
     }
-    val joinQueryWithAnnotations = join.map(rel => Environment.setAnnotationAccordingToConfig(rel))
 
     if (!config.nprrOnly) {
       val rootNodes = GHDSolver.getMinFHWDecompositions(join);
