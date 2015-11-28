@@ -2,6 +2,7 @@ package DunceCap
 
 import net.liftweb.json._
 
+import scala.collection.mutable
 import scala.io._
 
 import net.liftweb.json.Serialization.{read, write, writePretty}
@@ -17,13 +18,13 @@ case class RelationNotFoundException(what:String)  extends Exception
 
 object Environment {
   var config:DatabaseConfig = null
-  var schemaStack:Stack[Map[String, Schema]] = Stack[Map[String, Schema]]()
+  var schemaStack:Stack[mutable.Map[String, Schema]] = Stack[mutable.Map[String, Schema]]()
 
   def fromJSON(filename:String) = {
     val fileContents = Source.fromFile(filename).getLines.mkString
     implicit val formats = DefaultFormats
     config = parse(fileContents).extract[DatabaseConfig]
-    schemaStack.push(config.schemas)
+    schemaStack.push(mutable.Map() ++ config.schemas)
   }
   def toJSON() = {
     val filename = config.database+"/config.json"
@@ -44,7 +45,12 @@ object Environment {
   }
 
   def startScope(): Unit = {
-    schemaStack.push(Map[String, Schema]())
+    schemaStack.push(mutable.Map[String, Schema]())
+  }
+
+  def addRelation(rel:QueryRelation) = {
+    // TODO: do this properly
+    schemaStack.top += (rel.name -> Schema(rel.attrs.map(attr => Attribute("", "")), List(List(0)), rel.annotationType))
   }
 
   def endScope(): Unit = {

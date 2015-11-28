@@ -61,7 +61,11 @@ object DCParser extends RegexParsers {
     this.parseAll(this.statements, line) match {
       case DCParser.Success(parsedStatements, _) => {
         println(parsedStatements)
-        EvalGraph(parsedStatements).computePlan(config)
+        Environment.startScope()
+        parsedStatements.foreach(parsedStatement => Environment.addRelation(parsedStatement.lhs))
+        val plans = EvalGraph(parsedStatements).computePlan(config)
+        Environment.endScope()
+        return plans
       }
     }
   }

@@ -17,6 +17,10 @@ class ASTLambdaFunction(val inputArgument:QueryRelation,
 case class ASTItersCondition(iters:Int) extends ASTConvergenceCondition
 case class ASTEpsilonCondition(eps:Double) extends ASTConvergenceCondition
 
+case class InfiniteRecursionException(what:String) extends Exception
+case class MultibagRecursionUnsupportedException(what:String) extends Exception
+
+
 case class ASTQueryStatement(lhs:QueryRelation,
                              convergence:Option[ASTConvergenceCondition],
                              joinType:String,
@@ -31,7 +35,7 @@ case class ASTQueryStatement(lhs:QueryRelation,
   def computePlan(config:Config, isRecursive:Boolean): QueryPlan = {
     val annotationSetSuccess = join.map(rel => Environment.setAnnotationAccordingToConfig(rel))
     if (annotationSetSuccess.find(b => !b).isDefined) {
-      throw new RelationNotFoundException("TODO: fill in with a better explanation")
+      throw RelationNotFoundException("TODO: fill in with a better explanation")
     }
 
     if (!config.nprrOnly) {
@@ -43,12 +47,18 @@ case class ASTQueryStatement(lhs:QueryRelation,
       if (config.bagDedup) {
         chosen.head.doBagDedup
       }
-      chosen.head.getQueryPlan
+
+      if (false && convergence.isEmpty) {
+        println(lhs.name)
+        throw InfiniteRecursionException("TODO, fill in with better explanation")
+      } else {
+        chosen.head.getQueryPlan(convergence)
+      }
     } else {
       // since we're only using NPRR, just create a single GHD bag
       val oneBag = new GHD(new GHDNode(join) ,join, joinAggregates, lhs)
       oneBag.doPostProcessingPass
-      oneBag.getQueryPlan
+      oneBag.getQueryPlan(None)
     }
   }
 }

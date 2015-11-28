@@ -143,17 +143,31 @@ class GHD(val root:GHDNode,
   var lastMaterializedAttr:Option[Attr] = None
   var nextAggregatedAttr:Option[Attr] = None
 
-  def getQueryPlan(): QueryPlan = {
-    val a = getRelationsSummary()
-    val b = getOutputInfo()
-    val c = getPlanFromPostorderTraversal(root).toList
-    val d = getTopDownPassIterators()
-    new QueryPlan(
-      "join",
-      a,
-      b,
-      c,
-      d)
+  def getQueryPlan(convergence:Option[ASTConvergenceCondition]): QueryPlan = {
+    val relSummary = getRelationsSummary()
+    val outputInfo = getOutputInfo()
+    val topDownPass = getTopDownPassIterators()
+    if (root.children.isEmpty) {
+      new QueryPlan(
+        "join",
+        relSummary,
+        outputInfo,
+        List(root.getBagInfo(joinAggregates, convergence)),
+        topDownPass)
+
+    } else {
+      if (convergence.isDefined) {
+        throw MultibagRecursionUnsupportedException("")
+      } else {
+        new QueryPlan(
+          "join",
+          relSummary,
+          outputInfo,
+          getPlanFromPostorderTraversal(root).toList,
+          topDownPass)
+      }
+    }
+
   }
 
   private def getAttrsToRelationsMap(): Map[Attr, List[QueryRelation]] = {
@@ -263,7 +277,7 @@ class GHD(val root:GHDNode,
   }
 
   private def getPlanFromPostorderTraversal(node:GHDNode): Vector[QueryPlanBagInfo] = {
-    node.children.toVector.flatMap(c => getPlanFromPostorderTraversal(c)):+node.getBagInfo(joinAggregates)
+    node.children.toVector.flatMap(c => getPlanFromPostorderTraversal(c)):+node.getBagInfo(joinAggregates, None)
   }
 
   /**
@@ -353,7 +367,7 @@ class GHDNode(var rels: List[QueryRelation]) {
     return newSeen
   }
 
-  def getBagInfo(joinAggregates:Map[String,ParsedAggregate]): QueryPlanBagInfo = {
+  def getBagInfo(joinAggregates:Map[String,ParsedAggregate], convergence:Option[ASTConvergenceCondition]): QueryPlanBagInfo = {
     val jsonRelInfo = getRelationInfo()
     new QueryPlanBagInfo(
       bagName,
@@ -362,7 +376,10 @@ class GHDNode(var rels: List[QueryRelation]) {
       outputRelation.annotationType,
       jsonRelInfo,
       getNPRRInfo(joinAggregates),
-      None) //SUSAN FIXME
+      convergence.map(cond => cond match {
+        case ASTItersCondition(x) => QueryPlanRecursion("TODO" , "iterations", x.toString)
+        case ASTEpsilonCondition(x) => QueryPlanRecursion("TODO" , "epsilon", x.toString)
+      }))
   }
 
   def setDescendantNames(depth:Int): Unit = {
