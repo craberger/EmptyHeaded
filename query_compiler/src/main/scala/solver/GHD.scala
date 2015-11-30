@@ -147,27 +147,13 @@ class GHD(val root:GHDNode,
     val relSummary = getRelationsSummary()
     val outputInfo = getOutputInfo()
     val topDownPass = getTopDownPassIterators()
-    if (root.children.isEmpty) {
-      new QueryPlan(
-        "join",
-        relSummary,
-        outputInfo,
-        List(root.getBagInfo(joinAggregates, convergence)),
-        topDownPass)
 
-    } else {
-      if (convergence.isDefined) {
-        throw MultibagRecursionUnsupportedException("")
-      } else {
-        new QueryPlan(
-          "join",
-          relSummary,
-          outputInfo,
-          getPlanFromPostorderTraversal(root).toList,
-          topDownPass)
-      }
-    }
-
+    new QueryPlan(
+      "join",
+      relSummary,
+      outputInfo,
+      getPlanFromPostorderTraversal(root).toList,
+      topDownPass)
   }
 
   private def getAttrsToRelationsMap(): Map[Attr, List[QueryRelation]] = {
@@ -277,7 +263,7 @@ class GHD(val root:GHDNode,
   }
 
   private def getPlanFromPostorderTraversal(node:GHDNode): Vector[QueryPlanBagInfo] = {
-    node.children.toVector.flatMap(c => getPlanFromPostorderTraversal(c)):+node.getBagInfo(joinAggregates, None)
+    node.children.toVector.flatMap(c => getPlanFromPostorderTraversal(c)):+node.getBagInfo(joinAggregates)
   }
 
   /**
@@ -305,7 +291,7 @@ class GHD(val root:GHDNode,
 }
 
 
-class GHDNode(var rels: List[QueryRelation]) {
+class GHDNode(var rels: List[QueryRelation], val convergence:Option[ASTConvergenceCondition] = None) {
   val attrSet = rels.foldLeft(TreeSet[String]())(
     (accum: TreeSet[String], rel: QueryRelation) => accum | TreeSet[String](rel.attrNames: _*))
   var subtreeRels = rels
@@ -367,7 +353,7 @@ class GHDNode(var rels: List[QueryRelation]) {
     return newSeen
   }
 
-  def getBagInfo(joinAggregates:Map[String,ParsedAggregate], convergence:Option[ASTConvergenceCondition]): QueryPlanBagInfo = {
+  def getBagInfo(joinAggregates:Map[String,ParsedAggregate]): QueryPlanBagInfo = {
     val jsonRelInfo = getRelationInfo()
     new QueryPlanBagInfo(
       bagName,

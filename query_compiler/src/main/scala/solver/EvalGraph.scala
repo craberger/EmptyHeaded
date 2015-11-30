@@ -1,40 +1,64 @@
 package solver
 
-import DunceCap.{Config, ASTQueryStatement}
+import DunceCap._
 
 object EvalGraph {
-  def isRecursive(statement: ASTQueryStatement) = {
+  def isRecursive(statement:ASTQueryStatement) = {
     statement.dependsOn(statement)
   }
 
-  def computeDependencyGraph(statements: Set[ASTQueryStatement]): EvalGraphNode = {
+  def computeDependencyGraph(statements: List[ASTQueryStatement]): EvalGraphNode = {
     // one ASTStatement could be dependent on another if it has the other's output
     // in it's list of input rels, or in its annotation
-    val start = EvalGraphNode(statements.head, EvalGraph.isRecursive(statements.head))
-    val (deps, notDeps) = statements.tail.partition(statement => statements.head.dependsOn(statement))
+    val (start, left) = if (EvalGraph.isRecursive(statements.head)) {
+      val otherPart = statements.tail.find(st => st.lhs.name == statements.head.lhs.name)
+      if(otherPart.isEmpty) {
+        throw InfiniteRecursionException("")
+      }
+      (EvalGraphNode(statements.head, otherPart), statements.tail.filter(st => st.lhs.name != statements.head.lhs.name))
+    } else {
+      (EvalGraphNode(statements.head, None), statements.tail)
+    }
+    
+    val (deps, notDeps) = left.partition(statement => start.dependsOn(statement))
+    println(deps)
+    println(notDeps)
     val notDepsSet = notDeps.toSet
     val depsSet = deps.toSet
     start.deps = deps.flatMap(dep => {
-      val leftOverStatements = (deps-dep)++notDepsSet
-      if (!leftOverStatements.isEmpty) {
-        Some(computeDependencyGraph(leftOverStatements))
-      } else {
-        None
-      }
+      /* hack to get this to work for now, obviously not general */
+      Some(EvalGraphNode(dep, None))
     })
     return start
   }
 }
+
 case class EvalGraph(val statements:List[ASTQueryStatement]) {
-  val dependencyGraph = EvalGraph.computeDependencyGraph(statements.toSet)
+  val dependencyGraph = EvalGraph.computeDependencyGraph(statements.reverse)
   def computePlan(config:Config): List[QueryPlan] = {
+    println(dependencyGraph)
     dependencyGraph.computePlan(config).reverse
   }
 }
 
-case class EvalGraphNode(val statement:ASTQueryStatement, val recursive:Boolean) {
-  var deps: Set[EvalGraphNode] = null
+case class EvalGraphNode(val statement:ASTQueryStatement, val baseCase:Option[ASTQueryStatement]) {
+  var deps: List[EvalGraphNode] = List()
   def computePlan(config:Config): List[QueryPlan] = {
-    statement.computePlan(config, recursive)::deps.toList.flatMap(_.computePlan(config))
+    println("================")
+    println(statement.lhs.name)
+    val thisPlan = if (baseCase.isDefined) {
+      val root = new GHDNode(statement.join, statement.convergence)
+      root.children = List(new GHDNode(baseCase.get.join))
+      val ghd = new GHD(root, statement.join++baseCase.get.join, statement.joinAggregates++baseCase.get.joinAggregates, statement.lhs)
+      ghd.doPostProcessingPass()
+      ghd.getQueryPlan(statement.convergence)
+    } else {
+      statement.computePlan(config, false)
+    }
+    thisPlan::deps.flatMap(_.computePlan(config)).toList
+  }
+
+  def dependsOn(other:ASTQueryStatement) = {
+    statement.dependsOn(other) || (baseCase.isDefined && baseCase.get.dependsOn(other))
   }
 }

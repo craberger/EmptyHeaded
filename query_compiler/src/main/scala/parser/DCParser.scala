@@ -13,7 +13,7 @@ package object attr {
   type AttrInfo = (Attr, SelectionOp, SelectionVal)
 }
 
-class QueryRelation(val name:String, val attrs:List[AttrInfo],  var annotationType:String = "void*") {
+case class QueryRelation(val name:String, val attrs:List[AttrInfo],  var annotationType:String = "void*") {
   val attrNames = attrs.map(x => x._1)
   override def equals(that: Any): Boolean =
     that match {
@@ -63,7 +63,9 @@ object DCParser extends RegexParsers {
         println(parsedStatements)
         Environment.startScope()
         parsedStatements.foreach(parsedStatement => Environment.addRelation(parsedStatement.lhs))
-        val plans = EvalGraph(parsedStatements).computePlan(config)
+        val graph = EvalGraph(parsedStatements)
+        println(graph)
+        val plans = graph.computePlan(config)
         Environment.endScope()
         return plans
       }
@@ -78,7 +80,7 @@ object DCParser extends RegexParsers {
   def numericalValue:Parser[String] = """\d+\.?\d*""".r
   def convergenceExpression:Parser[ASTConvergenceCondition] = "*[" ~> convergenceCriteria ~ convergenceOp ~ numericalValue <~ "]" ^^ {
     case cc~co~cv => {
-      if (co == "i") {
+      if (cc == "i") {
         ASTItersCondition(cv.toInt)
       } else {
         ASTEpsilonCondition(cv.toDouble)
