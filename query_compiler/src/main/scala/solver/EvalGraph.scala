@@ -19,7 +19,7 @@ object EvalGraph {
     } else {
       (EvalGraphNode(statements.head, None), statements.tail)
     }
-    
+
     val (deps, notDeps) = left.partition(statement => start.dependsOn(statement))
     println(deps)
     println(notDeps)
@@ -44,12 +44,16 @@ case class EvalGraph(val statements:List[ASTQueryStatement]) {
 case class EvalGraphNode(val statement:ASTQueryStatement, val baseCase:Option[ASTQueryStatement]) {
   var deps: List[EvalGraphNode] = List()
   def computePlan(config:Config): List[QueryPlan] = {
-    println("================")
     println(statement.lhs.name)
     val thisPlan = if (baseCase.isDefined) {
       val root = new GHDNode(statement.join, statement.convergence)
+      root.lhs = Some(statement.lhs)
       root.children = List(new GHDNode(baseCase.get.join))
-      val ghd = new GHD(root, statement.join++baseCase.get.join, statement.joinAggregates++baseCase.get.joinAggregates, statement.lhs)
+      root.children.head.lhs = Some(baseCase.get.lhs)
+      val ghd = new GHD(
+        root,
+        (statement.join++baseCase.get.join), statement.joinAggregates++baseCase.get.joinAggregates,
+        QueryRelation(statement.lhs.name, statement.lhs.attrs:::baseCase.get.lhs.attrs, statement.lhs.annotationType))
       ghd.doPostProcessingPass()
       ghd.getQueryPlan(statement.convergence)
     } else {

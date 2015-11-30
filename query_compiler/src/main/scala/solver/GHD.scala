@@ -146,7 +146,11 @@ class GHD(val root:GHDNode,
   def getQueryPlan(convergence:Option[ASTConvergenceCondition]): QueryPlan = {
     val relSummary = getRelationsSummary()
     val outputInfo = getOutputInfo()
-    val topDownPass = getTopDownPassIterators()
+    val topDownPass = if (convergence.isEmpty) {
+      getTopDownPassIterators()
+    } else {
+      List()
+    }
 
     new QueryPlan(
       "join",
@@ -305,6 +309,7 @@ class GHDNode(var rels: List[QueryRelation], val convergence:Option[ASTConvergen
   var depth: Int = 0
   var projectedOutAttrs: Set[Attr] = null
   var outputRelation: QueryRelation = null
+  var lhs:Option[QueryRelation] = None
 
   /**
    * This is intended for use by GHDSolver, so we don't distinguish between trees with different vars set
@@ -363,8 +368,8 @@ class GHDNode(var rels: List[QueryRelation], val convergence:Option[ASTConvergen
       jsonRelInfo,
       getNPRRInfo(joinAggregates),
       convergence.map(cond => cond match {
-        case ASTItersCondition(x) => QueryPlanRecursion("TODO" , "iterations", x.toString)
-        case ASTEpsilonCondition(x) => QueryPlanRecursion("TODO" , "epsilon", x.toString)
+        case ASTItersCondition(x) => QueryPlanRecursion(children.head.bagName , "iterations", x.toString)
+        case ASTEpsilonCondition(x) => QueryPlanRecursion(children.head.bagName , "epsilon", x.toString)
       }))
   }
 
@@ -496,6 +501,17 @@ class GHDNode(var rels: List[QueryRelation], val convergence:Option[ASTConvergen
       child.computeProjectedOutAttrsAndOutputRelation(annotationType,outputAttrs, attrsFromAbove ++ attrSet)
     })
     subtreeRels ++= childrensOutputRelations
+    if (lhs.isDefined) {
+      rels.foreach(rel => if (rel.name == lhs.get.name) {
+        rel.name = childrensOutputRelations.head.name
+      })
+      subtreeRels.foreach(rel => if (rel.name == lhs.get.name) {
+        rel.name = childrensOutputRelations.head.name
+      })
+    }
+    println("subtreeRels")
+    println(subtreeRels)
+    println(outputRelation.name)
     return outputRelation
   }
 

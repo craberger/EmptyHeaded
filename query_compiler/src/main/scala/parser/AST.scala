@@ -28,7 +28,8 @@ case class ASTQueryStatement(lhs:QueryRelation,
                              joinAggregates:Map[String,ParsedAggregate]) extends ASTStatement {
   // TODO (sctu) : ignoring everything except for join, joinAggregates for now
   def dependsOn(statement: ASTQueryStatement): Boolean = {
-    val namesInThisStatement = (join.map(rels => rels.name):::joinAggregates.values.map(parsedAgg => parsedAgg.expression).toList).toSet
+    val namesInThisStatement = (join.map(rels => rels.name)
+      :::joinAggregates.values.map(parsedAgg => parsedAgg.expressionLeft+parsedAgg.expressionRight).toList).toSet
     println(namesInThisStatement)
     namesInThisStatement.find(name => name.contains(statement.lhs.name)).isDefined
   }

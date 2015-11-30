@@ -13,7 +13,7 @@ package object attr {
   type AttrInfo = (Attr, SelectionOp, SelectionVal)
 }
 
-case class QueryRelation(val name:String, val attrs:List[AttrInfo],  var annotationType:String = "void*") {
+case class QueryRelation(var name:String, val attrs:List[AttrInfo],  var annotationType:String = "void*") {
   val attrNames = attrs.map(x => x._1)
   override def equals(that: Any): Boolean =
     that match {
@@ -30,7 +30,12 @@ class RecursionStatement(val functionName:String, val inputArgument:QueryRelatio
 
 class TransitiveClosureStatement(val join:List[QueryRelation])
 
-case class ParsedAggregate(val op:String, val expression:String, val init:String)
+case class ParsedAggregate(val op:String,
+                           val expressionLeft:String,
+                           val init:String,
+                           val expressionRight:String) {
+  val expression = if (expressionRight.isEmpty) expressionLeft  else expressionLeft + "agg" + expressionRight
+}
 
 class ConverganceCriteria(val converganceType:String, val converganceOp:String, val converganceCondition:String)
 
@@ -46,11 +51,12 @@ class AggregateExpression(val op:String,
   }
 }
 class AnnotationExpression(val boundVariable:String,
-                           val expr:String,
-                           val agg:Option[AggregateExpression]) {
+                           val leftHalfOfExpr:String,
+                           val agg:Option[AggregateExpression],
+                           val rightHalfOfExpr:String) {
 
   def printData() = {
-    println("Bound Variable: " + boundVariable + " expr: " + expr)
+    println("Bound Variable: " + boundVariable + " expr: " + leftHalfOfExpr + rightHalfOfExpr)
     println("agg: ")
     agg.map(_.printData)
   }
@@ -110,7 +116,7 @@ object DCParser extends RegexParsers {
   def lastAttr = identifierName ^^ {case a => List(a)}
 
   //for the join query
-  def joinAndRecursionStatements = (joinStatement | emptyStatement) ^^ {case a => (a)}
+  def joinAndRecursionStatements = (joinStatement | emptyStatement) ^^ {case a => a}
 
 
   def joinStatement:Parser[List[QueryRelation]] = multipleJoinIdentifiers | singleJoinIdentifier
@@ -126,12 +132,12 @@ object DCParser extends RegexParsers {
   //returns the bound annotation mapped to the expression with a annotation in the middle
   //the annotation is (operation,attrs,init)
   def emptyAggregate:Parser[AggregateExpression] = "".r ^^ {case r => new AggregateExpression("",List(),"")}
-  def emptyAnnotationMap:Parser[AnnotationExpression] = emptyAggregate ^^ {case r => new AnnotationExpression("","",Some(r))}
+  def emptyAnnotationMap:Parser[AnnotationExpression] = emptyAggregate ^^ {case r => new AnnotationExpression("","",Some(r),"")}
   def annotationStatement:Parser[AnnotationExpression] = annotation | emptyAnnotationMap
 
-  def expression:Parser[String] = """[^<^.]*""".r
-  def annotation:Parser[AnnotationExpression] = (";" ~> identifierName <~ "=") ~ expression ~ opt(aggregateStatement) ^^ {
-    case a~b~c => new AnnotationExpression(a,b,c)
+  def expression:Parser[String] = """[^<^>^\]^\[]*""".r
+  def annotation:Parser[AnnotationExpression] = (";" ~> identifierName <~ "=") ~ ("[" ~> expression) ~ (opt(aggregateStatement) <~ "]") ^^ { // TODO:right side
+    case a~b~c => new AnnotationExpression(a,b,c,"")
   }
   def aggInit:Parser[String] = (";" ~> numericalValue) | emptyString ^^ { case a => a}
   def aggOp:Parser[String] = """SUM|COUNT|MIN""".r
@@ -144,16 +150,15 @@ object DCParser extends RegexParsers {
   def joinAndAnnotationStatement = joinAndRecursionStatements ~ annotationStatement ^^ { case a~b =>
     val joins = a
     val boundVariable = b.boundVariable
-    val expr = b.expr
     var aggregatesIn:Map[String, ParsedAggregate] = null
     if (b.agg.isDefined) {
       val aggregate = b.agg.get
       val operation = if (aggregate.op == "COUNT") "SUM" else aggregate.op
       val init = if (aggregate.op == "COUNT") "1" else aggregate.init
       val attrs = if (aggregate.attrs == List[String]("*")) a.flatMap(_.attrNames).distinct else aggregate.attrs
-      aggregatesIn = attrs.map(attr => ((attr -> new ParsedAggregate(operation, expr, init)))).toMap
+      aggregatesIn = attrs.map(attr => ((attr -> new ParsedAggregate(operation, b.leftHalfOfExpr, init, b.rightHalfOfExpr)))).toMap
     } else {
-      aggregatesIn = Map[String, ParsedAggregate]((a.head.attrNames.last -> new ParsedAggregate("CONST", expr, "1")))
+      aggregatesIn = Map[String, ParsedAggregate]((a.head.attrNames.last -> new ParsedAggregate("CONST", b.leftHalfOfExpr, "1", b.rightHalfOfExpr)))
     }
 
     (a,aggregatesIn)
