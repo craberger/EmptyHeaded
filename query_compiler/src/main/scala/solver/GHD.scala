@@ -144,7 +144,7 @@ class GHD(val root:GHDNode,
   var nextAggregatedAttr:Option[Attr] = None
 
   def getQueryPlan(convergence:Option[ASTConvergenceCondition]): QueryPlan = {
-    val relSummary = getRelationsSummary()
+    val relSummary = getRelationsSummary(bagOutputs.map(_.name).toSet)
     val outputInfo = getOutputInfo()
     val topDownPass = if (convergence.isEmpty) {
       getTopDownPassIterators()
@@ -156,7 +156,7 @@ class GHD(val root:GHDNode,
       "join",
       relSummary,
       outputInfo,
-      getPlanFromPostorderTraversal(root).toList,
+      getPlanFromPostorderTraversal(root, bagOutputs.map(_.name).toSet).toList,
       topDownPass)
   }
 
@@ -244,13 +244,13 @@ class GHD(val root:GHDNode,
    * Summary of all the relations in the GHD
    * @return Json for the relation summary
    */
-  private def getRelationsSummary(): List[QueryPlanRelationInfo] = {
-    val a = getRelationSummaryFromPreOrderTraversal(root)
+  private def getRelationsSummary(bagNames:Set[String]): List[QueryPlanRelationInfo] = {
+    val a = getRelationSummaryFromPreOrderTraversal(root, bagNames)
     a.distinct
   }
 
-  private def getRelationSummaryFromPreOrderTraversal(node:GHDNode): List[QueryPlanRelationInfo] = {
-    node.getRelationInfo(true):::node.children.flatMap(c => {getRelationSummaryFromPreOrderTraversal(c)})
+  private def getRelationSummaryFromPreOrderTraversal(node:GHDNode, bagNames:Set[String]): List[QueryPlanRelationInfo] = {
+    node.getRelationInfo(true, bagNames):::node.children.flatMap(c => {getRelationSummaryFromPreOrderTraversal(c, bagNames)})
   }
 
   /**
@@ -267,8 +267,8 @@ class GHD(val root:GHDNode,
       outputRelation.annotationType)
   }
 
-  private def getPlanFromPostorderTraversal(node:GHDNode): Vector[QueryPlanBagInfo] = {
-    node.children.toVector.flatMap(c => getPlanFromPostorderTraversal(c)):+node.getBagInfo(joinAggregates)
+  private def getPlanFromPostorderTraversal(node:GHDNode, bagNames:Set[String]): Vector[QueryPlanBagInfo] = {
+    node.children.toVector.flatMap(c => getPlanFromPostorderTraversal(c, bagNames)):+node.getBagInfo(joinAggregates, bagNames)
   }
 
   /**
@@ -359,8 +359,8 @@ class GHDNode(var rels: List[QueryRelation], val convergence:Option[ASTConvergen
     return newSeen
   }
 
-  def getBagInfo(joinAggregates:Map[String,ParsedAggregate]): QueryPlanBagInfo = {
-    val jsonRelInfo = getRelationInfo()
+  def getBagInfo(joinAggregates:Map[String,ParsedAggregate], bagNames:Set[String]): QueryPlanBagInfo = {
+    val jsonRelInfo = getRelationInfo(false, bagNames)
     new QueryPlanBagInfo(
       bagName,
       isDuplicateOf,
@@ -449,13 +449,13 @@ class GHDNode(var rels: List[QueryRelation], val convergence:Option[ASTConvergen
         }
       ],
    */
-  def getRelationInfo(forTopLevelSummary:Boolean = false): List[QueryPlanRelationInfo] = {
-    val relsToUse =
-      if (forTopLevelSummary) {
-        rels
+  def getRelationInfo(forTopLevelSummary:Boolean = false, bagOutputs:Set[String]): List[QueryPlanRelationInfo] = {
+    var relsToUse =
+      (if (forTopLevelSummary) {
+        rels.filter(r => !bagOutputs.contains(r.name))
       } else {
         subtreeRels
-      }
+      })
 
     val distinctRelationNames = relsToUse.map(r => r.name).distinct
     val retValue = distinctRelationNames.flatMap(n => {
