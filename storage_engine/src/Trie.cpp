@@ -238,12 +238,22 @@ size_t build_block(
 
   Set<hybrid>* myset = (Set<hybrid>*)(data_allocator->get_next(tid,sizeof(Set<layout>)));
   const size_t set_range = (set_size > 1) ? (set_data_buffer[set_size-1]-set_data_buffer[0]) : 0;
-  const size_t set_alloc_size =  layout::get_number_of_bytes(set_size,set_range)+100;
+  const size_t set_alloc_size =  layout::get_number_of_bytes(set_size,set_range)*2+100;
   uint8_t* set_data_in = data_allocator->get_next(tid,set_alloc_size);
   
   TrieBlock<layout,A>* tmp = TrieBlock<layout,A>::get_block(tid,offset,data_allocator);
   myset = tmp->get_set();
   myset->from_array(set_data_in,set_data_buffer,set_size);
+
+///some debug code for safety (should be in a debug pragma) FIXME
+  size_t lol = 0;
+  myset->foreach_index([&](uint32_t index, uint32_t data){
+    (void) data; (void) index;
+    assert(data == set_data_buffer[index]);
+    lol++;
+  });
+  assert(lol == set_size);
+//end debug code
 
   assert(set_alloc_size >= myset->number_of_bytes);
   data_allocator->roll_back(tid,set_alloc_size-myset->number_of_bytes);
@@ -303,7 +313,7 @@ void recursive_build(
   uint32_t *indicies,
   std::vector<A>* annotation){
 
-  uint32_t *sb = set_data_buffer->at(level*NUM_THREADS+tid);
+  uint32_t *sb = set_data_buffer->at(tid*NUM_THREADS+level);
   encode_tail(start,end,sb,&attr_in->at(level),indicies);
 
   const size_t next_offset = build_block<B,M>(tid,data_allocator,(end-start),sb);
@@ -320,12 +330,12 @@ void recursive_build(
   if(level < (num_levels-1)){
     B* tail = (B*)data_allocator->get_address(tid,next_offset);
     tail->init_next(tid,data_allocator);
-    auto tup = produce_ranges(start,end,ranges_buffer->at(level*NUM_THREADS+tid),set_data_buffer->at(level*NUM_THREADS+tid),indicies,&attr_in->at(level));
+    auto tup = produce_ranges(start,end,ranges_buffer->at(tid*NUM_THREADS+level),set_data_buffer->at(tid*NUM_THREADS+level),indicies,&attr_in->at(level));
     const size_t set_size = std::get<0>(tup);
     for(size_t i = 0; i < set_size; i++){
-      const size_t next_start = ranges_buffer->at(level*NUM_THREADS+tid)[i];
-      const size_t next_end = ranges_buffer->at(level*NUM_THREADS+tid)[i+1];
-      const uint32_t next_data = set_data_buffer->at(level*NUM_THREADS+tid)[i];        
+      const size_t next_start = ranges_buffer->at(tid*NUM_THREADS+level)[i];
+      const size_t next_end = ranges_buffer->at(tid*NUM_THREADS+level)[i+1];
+      const uint32_t next_data = set_data_buffer->at(tid*NUM_THREADS+level)[i];        
       recursive_build<B,M,A>(
         i,
         next_start,
@@ -439,9 +449,9 @@ Trie<A,M>::Trie(
       (void) tid;
       new_head->getNext(i)->index = -1;
     });
-
     //reset new_head because a realloc could of occured
-    par::for_range(0,head_size,100,[&](size_t tid, size_t i){
+    //par::for_range(0,head_size,100,[&](size_t tid, size_t i){
+    for(size_t i = 0; i < head_size; i++){ const size_t tid = 0;
       //some sort of recursion here
       const size_t start = ranges_buffer->at(0)[i];
       const size_t end = ranges_buffer->at(0)[i+1];
@@ -461,7 +471,8 @@ Trie<A,M>::Trie(
         set_data_buffer,
         indicies,
         annotations);
-    });
+    }
+    //});
   } else if(annotations->size() > 0){
     TrieBlock<layout,M>* new_head = (TrieBlock<layout,M>*)memoryBuffers->head->get_address(head_offset);
     //perform allocation for annotation (0 = tid)
