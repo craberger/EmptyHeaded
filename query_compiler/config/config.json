@@ -37,7 +37,7 @@
           0
         ]
       ],
-      "annotation": "blah"
+      "annotation": "void*"
     },
     "S": {
       "attributes": [
@@ -60,7 +60,7 @@
           0
         ]
       ],
-      "annotation": "blah"
+      "annotation": "void*"
     },
     "InvDeg": {
       "attributes": [
@@ -74,7 +74,7 @@
           0
         ],
       ],
-      "annotation": "blah"
+      "annotation": "void*"
     }
 
   },
