@@ -134,6 +134,7 @@ object CPPGenerator {
 
     val encodings = relations.flatMap(r => {
       val schema = Environment.config.schemas.get(r.name)
+      println(r.name)
       schema match {
         case Some(s) => {
           s.attributes
