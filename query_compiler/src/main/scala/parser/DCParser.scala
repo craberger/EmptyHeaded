@@ -66,7 +66,6 @@ object DCParser extends RegexParsers {
   def run(line:String, config:Config) : List[QueryPlan] = {
     this.parseAll(this.statements, line) match {
       case DCParser.Success(parsedStatements, _) => {
-        println(parsedStatements)
         Environment.startScope()
         parsedStatements.foreach(parsedStatement => Environment.addRelation(parsedStatement.lhs))
         val graph = EvalGraph(parsedStatements)

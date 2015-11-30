@@ -16,7 +16,6 @@ case class ASTQueryStatement(lhs:QueryRelation,
   def dependsOn(statement: ASTQueryStatement): Boolean = {
     val namesInThisStatement = (join.map(rels => rels.name)
       :::joinAggregates.values.map(parsedAgg => parsedAgg.expressionLeft+parsedAgg.expressionRight).toList).toSet
-    println(namesInThisStatement)
     namesInThisStatement.find(name => name.contains(statement.lhs.name)).isDefined
   }
 

@@ -134,7 +134,6 @@ object CPPGenerator {
 
     val encodings = relations.flatMap(r => {
       val schema = Environment.config.schemas.get(r.name)
-      println(r.name)
       schema match {
         case Some(s) => {
           s.attributes
@@ -440,8 +439,6 @@ object CPPGenerator {
             code.append(s"""const size_t count_${head.name} = Builder->build_aggregated_set(Iterator_${head.accessors(0).name}_${head.accessors(0).attrs.mkString("_")}->get_block(${index1}));""")
           }
           case 2 =>{
-            println(relationIndices)
-            println(relationNames)
             val index1 = relationIndices(relationNames.indexOf( head.accessors(0).name + "_" + head.accessors(0).attrs.mkString("_") ) )
             val index2 = relationIndices(relationNames.indexOf(head.accessors(1).name + "_" + head.accessors(1).attrs.mkString("_")))
             code.append(s"""const size_t count_${head.name} = Builder->build_aggregated_set(Iterator_${head.accessors(0).name}_${head.accessors(0).attrs.mkString("_")}->get_block(${index1}),Iterator_${head.accessors(1).name}_${head.accessors(1).attrs.mkString("_")}->get_block(${index2}));""")
