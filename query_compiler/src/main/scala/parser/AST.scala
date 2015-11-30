@@ -1,25 +1,11 @@
 package DunceCap
 
-abstract trait ASTStatement {}
-abstract trait ASTConvergenceCondition {}
-
-//input to this should be 
-//(1) list of attrs in the output, 
-//(2) list of attrs eliminated (aggregations), 
-//(3) list of relations joined
-//(4) list of attrs with selections
-//(5) list of exressions for aggregations
-class ASTLambdaFunction(val inputArgument:QueryRelation,
-                        val join:List[QueryRelation],
-                        val aggregates:Map[String,ParsedAggregate])
-
+abstract trait ASTStatement
+abstract trait ASTConvergenceCondition
 
 case class ASTItersCondition(iters:Int) extends ASTConvergenceCondition
 case class ASTEpsilonCondition(eps:Double) extends ASTConvergenceCondition
-
 case class InfiniteRecursionException(what:String) extends Exception
-case class MultibagRecursionUnsupportedException(what:String) extends Exception
-
 
 case class ASTQueryStatement(lhs:QueryRelation,
                              convergence:Option[ASTConvergenceCondition],
@@ -49,13 +35,7 @@ case class ASTQueryStatement(lhs:QueryRelation,
       if (config.bagDedup) {
         chosen.head.doBagDedup
       }
-
-      if (false && convergence.isEmpty) {
-        println(lhs.name)
-        throw InfiniteRecursionException("TODO, fill in with better explanation")
-      } else {
-        chosen.head.getQueryPlan(convergence)
-      }
+      chosen.head.getQueryPlan(convergence)
     } else {
       // since we're only using NPRR, just create a single GHD bag
       val oneBag = new GHD(new GHDNode(join) ,join, joinAggregates, lhs)

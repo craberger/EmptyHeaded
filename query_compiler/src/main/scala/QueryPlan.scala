@@ -67,7 +67,8 @@ case class QueryPlanRecursion(
 
 case class QueryPlanAggregation(val operation:String,
                            val init:String,
-                           val expression:String,
+                           val expressionLeft:String,
+                           val expressionRight:String,
                            val prev:Option[Attr],
                            val next:Option[Attr])
 

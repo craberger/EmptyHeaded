@@ -14,7 +14,7 @@ import scala.collection.mutable.Stack
   for code generation information.
 */
 
-case class RelationNotFoundException(what:String)  extends Exception
+case class RelationNotFoundException(what:String)  extends Exception(what)
 
 object Environment {
   var config:DatabaseConfig = null

@@ -70,7 +70,6 @@ object DCParser extends RegexParsers {
         Environment.startScope()
         parsedStatements.foreach(parsedStatement => Environment.addRelation(parsedStatement.lhs))
         val graph = EvalGraph(parsedStatements)
-        println(graph)
         val plans = graph.computePlan(config)
         Environment.endScope()
         return plans
@@ -136,8 +135,8 @@ object DCParser extends RegexParsers {
   def annotationStatement:Parser[AnnotationExpression] = annotation | emptyAnnotationMap
 
   def expression:Parser[String] = """[^<^>^\]^\[]*""".r
-  def annotation:Parser[AnnotationExpression] = (";" ~> identifierName <~ "=") ~ ("[" ~> expression) ~ (opt(aggregateStatement) <~ "]") ^^ { // TODO:right side
-    case a~b~c => new AnnotationExpression(a,b,c,"")
+  def annotation:Parser[AnnotationExpression] = (";" ~> identifierName <~ "=") ~ ("[" ~> expression) ~ opt(aggregateStatement) ~ (expression <~ "]") ^^ { // TODO:right side
+    case a~b~c~d => new AnnotationExpression(a,b,c,d)
   }
   def aggInit:Parser[String] = (";" ~> numericalValue) | emptyString ^^ { case a => a}
   def aggOp:Parser[String] = """SUM|COUNT|MIN""".r

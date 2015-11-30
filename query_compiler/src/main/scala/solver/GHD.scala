@@ -38,7 +38,7 @@ object GHD {
                              attr:Attr,
                              prevNextInfo:(Option[Attr], Option[Attr])): Option[QueryPlanAggregation] = {
     joinAggregates.get(attr).map(parsedAggregate => {
-      new QueryPlanAggregation(parsedAggregate.op, parsedAggregate.init, parsedAggregate.expression, prevNextInfo._1, prevNextInfo._2)
+      new QueryPlanAggregation(parsedAggregate.op, parsedAggregate.init, parsedAggregate.expressionLeft, parsedAggregate.expressionRight, prevNextInfo._1, prevNextInfo._2)
     })
   }
 
@@ -201,7 +201,8 @@ class GHD(val root:GHDNode,
           Some(QueryPlanAggregation(
             joinAggregates.get(newAttr).get.op,
             joinAggregates.get(newAttr).get.init,
-            joinAggregates.get(newAttr).get.expression,
+            joinAggregates.get(newAttr).get.expressionLeft,
+            joinAggregates.get(newAttr).get.expressionRight,
             prevNextAggEntry._1,
             prevNextAggEntry._2))
         } else {
@@ -509,9 +510,6 @@ class GHDNode(var rels: List[QueryRelation], val convergence:Option[ASTConvergen
         rel.name = childrensOutputRelations.head.name
       })
     }
-    println("subtreeRels")
-    println(subtreeRels)
-    println(outputRelation.name)
     return outputRelation
   }
 
