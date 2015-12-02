@@ -38,7 +38,7 @@ object GHD {
                              attr:Attr,
                              prevNextInfo:(Option[Attr], Option[Attr])): Option[QueryPlanAggregation] = {
     joinAggregates.get(attr).map(parsedAggregate => {
-      new QueryPlanAggregation(parsedAggregate.op, parsedAggregate.init, parsedAggregate.expression, prevNextInfo._1, prevNextInfo._2)
+      new QueryPlanAggregation(parsedAggregate.op, parsedAggregate.init, parsedAggregate.expressionLeft, parsedAggregate.expressionRight, prevNextInfo._1, prevNextInfo._2)
     })
   }
 
@@ -143,17 +143,21 @@ class GHD(val root:GHDNode,
   var lastMaterializedAttr:Option[Attr] = None
   var nextAggregatedAttr:Option[Attr] = None
 
-  def getQueryPlan(): QueryPlan = {
-    val a = getRelationsSummary()
-    val b = getOutputInfo()
-    val c = getPlanFromPostorderTraversal(root).toList
-    val d = getTopDownPassIterators()
+  def getQueryPlan(convergence:Option[ASTConvergenceCondition]): QueryPlan = {
+    val relSummary = getRelationsSummary(bagOutputs.map(_.name).toSet)
+    val outputInfo = getOutputInfo()
+    val topDownPass = if (convergence.isEmpty) {
+      getTopDownPassIterators()
+    } else {
+      List()
+    }
+
     new QueryPlan(
       "join",
-      a,
-      b,
-      c,
-      d)
+      relSummary,
+      outputInfo,
+      getPlanFromPostorderTraversal(root, bagOutputs.map(_.name).toSet).toList,
+      topDownPass)
   }
 
   private def getAttrsToRelationsMap(): Map[Attr, List[QueryRelation]] = {
@@ -197,7 +201,8 @@ class GHD(val root:GHDNode,
           Some(QueryPlanAggregation(
             joinAggregates.get(newAttr).get.op,
             joinAggregates.get(newAttr).get.init,
-            joinAggregates.get(newAttr).get.expression,
+            joinAggregates.get(newAttr).get.expressionLeft,
+            joinAggregates.get(newAttr).get.expressionRight,
             prevNextAggEntry._1,
             prevNextAggEntry._2))
         } else {
@@ -239,13 +244,13 @@ class GHD(val root:GHDNode,
    * Summary of all the relations in the GHD
    * @return Json for the relation summary
    */
-  private def getRelationsSummary(): List[QueryPlanRelationInfo] = {
-    val a = getRelationSummaryFromPreOrderTraversal(root)
+  private def getRelationsSummary(bagNames:Set[String]): List[QueryPlanRelationInfo] = {
+    val a = getRelationSummaryFromPreOrderTraversal(root, bagNames)
     a.distinct
   }
 
-  private def getRelationSummaryFromPreOrderTraversal(node:GHDNode): List[QueryPlanRelationInfo] = {
-    node.getRelationInfo(true):::node.children.flatMap(c => {getRelationSummaryFromPreOrderTraversal(c)})
+  private def getRelationSummaryFromPreOrderTraversal(node:GHDNode, bagNames:Set[String]): List[QueryPlanRelationInfo] = {
+    node.getRelationInfo(true, bagNames):::node.children.flatMap(c => {getRelationSummaryFromPreOrderTraversal(c, bagNames)})
   }
 
   /**
@@ -262,8 +267,8 @@ class GHD(val root:GHDNode,
       outputRelation.annotationType)
   }
 
-  private def getPlanFromPostorderTraversal(node:GHDNode): Vector[QueryPlanBagInfo] = {
-    node.children.toVector.flatMap(c => getPlanFromPostorderTraversal(c)):+node.getBagInfo(joinAggregates)
+  private def getPlanFromPostorderTraversal(node:GHDNode, bagNames:Set[String]): Vector[QueryPlanBagInfo] = {
+    node.children.toVector.flatMap(c => getPlanFromPostorderTraversal(c, bagNames)):+node.getBagInfo(joinAggregates, bagNames)
   }
 
   /**
@@ -280,7 +285,7 @@ class GHD(val root:GHDNode,
     root.setBagName("bag_0_"+attrNames)
     root.setDescendantNames(1)
 
-    root.computeProjectedOutAttrsAndOutputRelation(outputRelation.annotationType,outputRelation.attrNames.toSet, Set())
+    root.computeProjectedOutAttrsAndOutputRelation(outputRelation.annotationType,outputRelation.attrNames.toSet, Set(), joinAggregates.keySet)
     root.createAttrToRelsMapping
     bagOutputs = getBagOutputRelations(root)
   }
@@ -291,7 +296,7 @@ class GHD(val root:GHDNode,
 }
 
 
-class GHDNode(var rels: List[QueryRelation]) {
+class GHDNode(var rels: List[QueryRelation], val convergence:Option[ASTConvergenceCondition] = None) {
   val attrSet = rels.foldLeft(TreeSet[String]())(
     (accum: TreeSet[String], rel: QueryRelation) => accum | TreeSet[String](rel.attrNames: _*))
   var subtreeRels = rels
@@ -305,6 +310,7 @@ class GHDNode(var rels: List[QueryRelation]) {
   var depth: Int = 0
   var projectedOutAttrs: Set[Attr] = null
   var outputRelation: QueryRelation = null
+  var lhs:Option[QueryRelation] = None
 
   /**
    * This is intended for use by GHDSolver, so we don't distinguish between trees with different vars set
@@ -353,8 +359,8 @@ class GHDNode(var rels: List[QueryRelation]) {
     return newSeen
   }
 
-  def getBagInfo(joinAggregates:Map[String,ParsedAggregate]): QueryPlanBagInfo = {
-    val jsonRelInfo = getRelationInfo()
+  def getBagInfo(joinAggregates:Map[String,ParsedAggregate], bagNames:Set[String]): QueryPlanBagInfo = {
+    val jsonRelInfo = getRelationInfo(false, bagNames)
     new QueryPlanBagInfo(
       bagName,
       isDuplicateOf,
@@ -362,7 +368,10 @@ class GHDNode(var rels: List[QueryRelation]) {
       outputRelation.annotationType,
       jsonRelInfo,
       getNPRRInfo(joinAggregates),
-      None) //SUSAN FIXME
+      convergence.map(cond => cond match {
+        case ASTItersCondition(x) => QueryPlanRecursion(children.head.bagName , "iterations", x.toString)
+        case ASTEpsilonCondition(x) => QueryPlanRecursion(children.head.bagName , "epsilon", x.toString)
+      }))
   }
 
   def setDescendantNames(depth:Int): Unit = {
@@ -440,13 +449,13 @@ class GHDNode(var rels: List[QueryRelation]) {
         }
       ],
    */
-  def getRelationInfo(forTopLevelSummary:Boolean = false): List[QueryPlanRelationInfo] = {
-    val relsToUse =
-      if (forTopLevelSummary) {
-        rels
+  def getRelationInfo(forTopLevelSummary:Boolean = false, bagOutputs:Set[String]): List[QueryPlanRelationInfo] = {
+    var relsToUse =
+      (if (forTopLevelSummary) {
+        rels.filter(r => !bagOutputs.contains(r.name))
       } else {
         subtreeRels
-      }
+      })
 
     val distinctRelationNames = relsToUse.map(r => r.name).distinct
     val retValue = distinctRelationNames.flatMap(n => {
@@ -483,16 +492,24 @@ class GHDNode(var rels: List[QueryRelation]) {
   /**
    * Compute what is projected out in this bag, and what this bag's output relation is
    */
-  def computeProjectedOutAttrsAndOutputRelation(annotationType:String,outputAttrs:Set[Attr], attrsFromAbove:Set[Attr]): QueryRelation = {
+  def computeProjectedOutAttrsAndOutputRelation(annotationType:String,outputAttrs:Set[Attr], attrsFromAbove:Set[Attr], aggregatedAttrs:Set[Attr]): QueryRelation = {
     projectedOutAttrs = attrSet -- (outputAttrs ++ attrsFromAbove)
     val keptAttrs = attrSet intersect (outputAttrs ++ attrsFromAbove)
     // Right now we only allow a query to have one type of annotation, so
     // we take the annotation type from an arbitrary relation that was joined in this bag
     outputRelation = new QueryRelation(bagName, keptAttrs.map(attr =>(attr, "", "")).toList, annotationType)
     val childrensOutputRelations = children.map(child => {
-      child.computeProjectedOutAttrsAndOutputRelation(annotationType,outputAttrs, attrsFromAbove ++ attrSet)
+      child.computeProjectedOutAttrsAndOutputRelation(annotationType,outputAttrs, (attrsFromAbove ++ attrSet -- aggregatedAttrs), aggregatedAttrs)
     })
     subtreeRels ++= childrensOutputRelations
+    if (lhs.isDefined) {
+      rels.foreach(rel => if (rel.name == lhs.get.name) {
+        rel.name = childrensOutputRelations.head.name
+      })
+      subtreeRels.foreach(rel => if (rel.name == lhs.get.name) {
+        rel.name = childrensOutputRelations.head.name
+      })
+    }
     return outputRelation
   }
 

@@ -47,10 +47,9 @@ object QueryCompiler {
         } else if(!config.codeGen.isDefined){
           config.query
         } else ""
-        
 
       val queryPlans:QueryPlans = config.codeGen match {
-        case None => QueryPlans(List[QueryPlan](DCParser.run(queryString, config))) //SUSAN FIXME when we get code chunks we get a list of query plans for code generation
+        case None => QueryPlans(DCParser.run(queryString, config))
         case Some(g) => QP.fromJSON(g)
       }
 
