@@ -6,8 +6,7 @@ services:
 before_install:
 - docker pull craberger/emptyheaded
 
-script:
-- docker run craberger/emptyheaded /bin/bash -c "cd /root/EmptyHeaded; source ./tests/testAll.sh"
+script: "source ./tests/testAll.sh"
 
 notifications:
   email:
