@@ -140,11 +140,11 @@ def duplicated_graph(dataset,startNode,create):
     SSSP(x;y:int)*[c=0] :- Edge(w,x),SSSP(w);y=[1+<<MIN(w;1)>>]."""% locals())
 
 def lubm(create):
-  print "DATASET: LUBM500M"
+  print "DATASET: LUBM10000"
   if create:
     db_config="/afs/cs.stanford.edu/u/caberger/rdf.json"
     createDB(db_config)
-  loadDB("/dfs/scratch0/caberger/datasets/lubm500M/db_python")
+  loadDB("/dfs/scratch0/caberger/datasets/lubm10000/db_python")
   print "RUNNING QUERY: LUBM1"
   query("lubm1(a) :- takesCourse(a,b='http://www.Department0.University0.edu/GraduateCourse0'),rdftype(a,c='http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#GraduateStudent').")
   print "RUNNING QUERY: LUBM2"
@@ -164,7 +164,7 @@ def lubm(create):
   print "RUNNING QUERY: LUBM11"
   query("lubm11(a) :- rdftype(a,x='http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#ResearchGroup'),subOrganizationOf(a,y='http://www.University0.edu').")
   print "RUNNING QUERY: LUBM12"
-  query("lubm12(a,b) :- worksFor(a,b),rdftype(a,c='http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#FullProfessor'),subOrganizationOf(b,d='http://www.University0.edu'),rdftype(b,e='http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#Department').")
+  query("lubm12(a,b) :- worksFor(b,a),rdftype(b,c='http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#FullProfessor'),subOrganizationOf(a,d='http://www.University0.edu'),rdftype(a,e='http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#Department').")
   print "RUNNING QUERY: LUBM 13"
   query("lubm13(a) :- rdftype(a,x='http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#GraduateStudent'),undergraduateDegreeFrom(a,y='http://www.University567.edu').")
   print "RUNNING QUERY: LUBM 14"

@@ -48,8 +48,8 @@ RUN apt-get install sbt
 RUN pip install pandas 
 RUN pip install ipython
 
-RUN git clone https://github.com/HazyResearch/EmptyHeaded.git
-RUN cd EmptyHeaded && ./setup.sh #pulls scala
+#RUN git clone https://github.com/HazyResearch/EmptyHeaded.git
+#RUN cd EmptyHeaded && ./setup.sh #pulls scala
 
-ENV EMPTYHEADED_HOME=`pwd`
-ENV PYTHONPATH=$EMPTYHEADED_HOME/runtime
+#ENV EMPTYHEADED_HOME=`pwd`
+#ENV PYTHONPATH=$EMPTYHEADED_HOME/runtime
