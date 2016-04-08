@@ -73,10 +73,6 @@ class QueryPlannerTest extends FunSuite {
     assertResult(optimized)(ir)
   }
 
-  test("Scratch") {
-    val optimized = QueryPlanner.findOptimizedPlans(DatalogParser.run("Triangle(a;w) :- Edge(a,b),Edge(b,c),w:float<-[SUM(b)]."))
-  }
-
   test("lollipop query") {
     val bag1 = Rule(
       Result(Rel("bag_1_a_b_c_Lollipop", Attributes(List("a", "b", "c")), Annotations(List())), true),
