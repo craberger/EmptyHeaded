@@ -73,8 +73,67 @@ class QueryPlannerTest extends FunSuite {
     assertResult(optimized)(ir)
   }
 
-  test("Scratch") {
-    val optimized = QueryPlanner.findOptimizedPlans(DatalogParser.run("Triangle(a;w) :- Edge(a,b),Edge(b,c),w:float<-[SUM(b)]."))
+  test("Test that the query optimizer puts each rel in its own bag for acyclic queries.") {
+    val bag2 = Rule(
+      Result(Rel("bag_2_d_e_Line", Attributes(List("d", "e")), Annotations(List())), true),
+      None,
+      Operation("*"),
+      Order(Attributes(List("d", "e"))),
+      Project(Attributes(List())),
+      Join(List(
+        Rel("Edge", Attributes(List("d", "e")), Annotations(List())))),
+      Aggregations(List()),
+      Filters(List())
+    )
+
+    val bag1 = Rule(
+      Result(Rel("bag_1_c_d_Line", Attributes(List("c", "d")), Annotations(List())), true),
+      None,
+      Operation("*"),
+      Order(Attributes(List("c", "d", "e"))),
+      Project(Attributes(List("e"))),
+      Join(List(
+        Rel("Edge", Attributes(List("c", "d")), Annotations(List())),
+        Rel("bag_2_d_e_Line", Attributes(List("d", "e")), Annotations(List())))
+      ),
+      Aggregations(List()),
+      Filters(List())
+    )
+
+    val root = Rule(
+      Result(Rel("Line_root", Attributes(List("b", "c")), Annotations(List())), true),
+      None,
+      Operation("*"),
+      Order(Attributes(List("b", "c", "d", "a"))),
+      Project(Attributes(List("a", "d"))),
+      Join(List(
+        Rel("Edge", Attributes(List("b", "c")), Annotations(List())),
+        Rel("bag_2_d_e_Line", Attributes(List("a", "b")), Annotations(List())),
+        Rel("bag_1_c_d_Line", Attributes(List("c", "d")), Annotations(List()))
+      )
+      ),
+      Aggregations(List()),
+      Filters(List())
+    )
+
+    val topDown = Rule(
+      Result(Rel("Line", Attributes(List("a", "b", "c", "d", "e")), Annotations(List())), false),
+      None,
+      Operation("*"),
+      Order(Attributes(List("b", "c", "d", "a", "e"))),
+      Project(Attributes(List())),
+      Join(List(
+        Rel("Line_root", Attributes(List("b", "c")), Annotations(List())),
+        Rel("bag_2_d_e_Line", Attributes(List("a", "b")), Annotations(List())),
+        Rel("bag_1_c_d_Line", Attributes(List("c", "d")), Annotations(List())),
+        Rel("bag_2_d_e_Line", Attributes(List("d", "e")), Annotations(List()))
+      )),
+      Aggregations(List()),
+      Filters(List())
+    )
+
+    val optimized = IROptimizer.dedupComputations(QueryPlanner.findOptimizedPlans(DatalogParser.run("Line(a,b,c,d,e) :- Edge(a,b),Edge(b,c),Edge(c,d),Edge(d,e).")))
+    assertResult(IR(List(bag2, bag1, root, topDown)))(optimized)
   }
 
   test("lollipop query") {

@@ -245,7 +245,7 @@ object GHDSolver {
               val possibleSubtrees: List[List[GHDNode]] = getListsOfPossibleSubtrees(partitions.get, bagAttrSet, selections)
               for (subtrees <- possibleSubtrees) {
                 newNode.children = subtrees
-                treesFound.append(newNode)
+                treesFound.append(duplicateTree(newNode))
               }
             }
           }
